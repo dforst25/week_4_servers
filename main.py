@@ -1,72 +1,45 @@
 from fastapi import FastAPI, HTTPException
 import uvicorn
-from pydantic import BaseModel
-from utils.json_handler import *
+from utils.caesar import *
+from utils.rail_fence import *
 
-
-class Item(BaseModel):
-    id: int
-    name: str
-    price: float
-
+USERS_PATH = "data/names.txt"
 
 app = FastAPI()
 
 
 @app.get("/test")
-def response():
-    pass
-
-JSON_PATH = "./data/data.json"
+def hi_from() -> dict:
+    return {"msg": "hi from test"}
 
 
-@app.put("/items/{item_id}")
-def update_price(item_id: int, new_price: float):
-    items = JsonHandler.load_data(JSON_PATH)
-    for item in items:
-        if item['id'] == item_id:
-            item['price'] = new_price
-            JsonHandler.save_data(items, JSON_PATH)
-            return item
-    raise HTTPException(status_code=404, detail="item not found")
+@app.get("/test/{name}")
+def add_name(name: str):
+
+    with open(USERS_PATH, "a") as f:
+        f.write(name + "\n")
+    return {"msg": "saved user"}
 
 
-@app.post("/items/")
-def add_item(new_item: Item):
-    items = JsonHandler.load_data(JSON_PATH)
-    for item in items:
-        if item['id'] == new_item.id:
-            raise HTTPException(status_code=409, detail="Item already exists")
-    items.append(new_item.dict())
-    JsonHandler.save_data(items, JSON_PATH)
-    return new_item.dict()
+@app.post("/caesar/")
+def manipulate_text(text_manipulate: Caesar.Message):
+    match text_manipulate.mode:
+        case "encrypt":
+            return {"encrypted_text": Caesar.encrypt(text_manipulate.text, text_manipulate.offset)}
+        case "decrypt":
+            return {"decrypted_text": Caesar.decrypt(text_manipulate.text, text_manipulate.offset)}
+        case _:
+            raise HTTPException(status_code=409, detail="invalid mode!!!")
 
 
-def get_sort_key(item, sort_by):
-    value = item[sort_by]
-    if isinstance(value, str):
-        return value.lower()
-    return value
+@app.get("/fence/encrypt")
+def encrypt_text(text: str):
+    return {"encrypted_text": RailFence.encrypt(text)}
 
 
-@app.get("/items/")
-def get_sorted_items(sort_alg: str = "asc", sort_by: str = None):
-    items = JsonHandler.load_data(JSON_PATH)
-    if not sort_by:
-        return items
-    items.sort(key=lambda item: get_sort_key(item, sort_by), reverse=(sort_alg == "desc"))
-    return items
-
-
-@app.delete("/items/{item_id}")
-def remove_item(item_id: int):
-    items = JsonHandler.load_data(JSON_PATH)
-    size = len(items)
-    for i in range(size):
-        if items[i]["id"] == item_id:
-            old_item = items.pop(i)
-            JsonHandler.save_data(items, JSON_PATH)
-            return old_item
+@app.post("/fence/decrypt")
+def decrypt_text(text: RailFence.Message):
+    return {"decrypted_text": RailFence.decrypt(text.text)}
 
 
 if __name__ == "__main__":
